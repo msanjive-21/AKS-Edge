@@ -4,7 +4,8 @@
 Param(
     [String]$jsonFile,
     [switch]$spContributorRole,
-    [switch]$spCredReset
+    [switch]$spCredReset,
+    [String]$locationsScript
 )
 
 #Requires -RunAsAdministrator
@@ -13,12 +14,14 @@ New-Variable -Option Constant -ErrorAction SilentlyContinue -Name cliMinVersions
     "azure-cli"      = "2.41.0"
     "azure-cli-core" = "2.41.0"
 }
-New-Variable -Option Constant -ErrorAction SilentlyContinue -Name arcLocations -Value @(
-    "westeurope", "eastus", "westcentralus", "southcentralus", "southeastasia", "uksouth",
-    "eastus2", "westus2", "australiaeast", "northeurope", "francecentral", "centralus",
-    "westus", "northcentralus", "koreacentral", "japaneast", "eastasia", "westus3",
-    "canadacentral", "eastus2euap"
-)
+if ($locationsScript) {
+    Write-Output "Location script found at: $locationsScript"
+    . $locationsScript
+} else {
+    Write-Output "Cannot access location script."
+}
+
+$arcLocations = Get-ArcSupportedLocations
 function Test-AzVersions {
     #Function to check if the installed az versions are greater or equal to minVersions
     $retval = $true

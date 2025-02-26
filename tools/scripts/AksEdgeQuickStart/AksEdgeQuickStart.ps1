@@ -11,42 +11,9 @@ param(
 #Requires -RunAsAdministrator
 New-Variable -Name gAksEdgeQuickStartVersion -Value "1.0.241002.1000" -Option Constant -ErrorAction SilentlyContinue
 
-New-Variable -Option Constant -ErrorAction SilentlyContinue -Name arcLocations -Value @(
-    "southcentralus", "westus", "westus2", "westus3", "centralus", "eastus", "eastus2", "eastus3", "westcentralus", "northcentralus", "brazilsouth",
-    "brazilsoutheast", "canadacentral", "canadaeast", "chilenorthcentral", "mexicocentral", "usgovvirginia", "usdodcentral", "usdodeast", "usgovarizona",
-    "usgovtexas", "usseceast", "ussecwest", "ussecwestcentral", "eastasia", "southeastasia", "australiaeast", "australiasoutheast", "australiacentral",
-    "australiacentral2", "chinaeast", "chinaeast2", "chinanorth", "chinanorth2", "chinanorth3", "centralindia", "southindia", "westindia", "indonesiacentral",
-    "japaneast", "japanwest", "koreacentral", "koreasouth", "malaysiawest", "newzealandnorth", "taiwan", "austriaeast", "belgiumcentral", "denmarkeast",
-    "northeurope", "westeurope", "finlandcentral", "francecentral", "francesouth", "germanywestcentral", "germanynortheast", "germanycentral", "germanynorth",
-    "greece", "italynorth", "norwayeast", "norwaywest", "polandcentral", "spaincentral", "swedencentral", "swedensouth", "switzerlandnorth",
-    "switzerlandwest", "uksouth", "ukwest", "southafricanorth", "southafricawest", "israelcentral", "qatarcentral", "uaenorth", "uaecentral"
-)
-
 if (! [Environment]::Is64BitProcess) {
     Write-Host "Error: Run this in 64bit Powershell session" -ForegroundColor Red
     exit -1
-}
-#Validate inputs
-$skipAzureArc = $false
-if ([string]::IsNullOrEmpty($SubscriptionId)) {
-    Write-Host "Warning: Require SubscriptionId for Azure Arc" -ForegroundColor Cyan
-    $skipAzureArc = $true
-}
-if ([string]::IsNullOrEmpty($TenantId)) {
-    Write-Host "Warning: Require TenantId for Azure Arc" -ForegroundColor Cyan
-    $skipAzureArc = $true
-}
-if ([string]::IsNullOrEmpty($Location)) {
-    Write-Host "Warning: Require Location for Azure Arc" -ForegroundColor Cyan
-    $skipAzureArc = $true
-} elseif ($arcLocations -inotcontains $Location) {
-    Write-Host "Error: Location $Location is not supported for Azure Arc" -ForegroundColor Red
-    Write-Host "Supported Locations : $arcLocations"
-    exit -1
-}
-
-if ($skipAzureArc) {
-    Write-Host "Azure setup and Arc connection will be skipped as required details are not available" -ForegroundColor Yellow
 }
 
 $installDir = $((Get-Location).Path)
@@ -159,6 +126,31 @@ Set-Content -Path $aksedgejson -Value $aksedgeConfig -Force
 $aksedgeShell = (Get-ChildItem -Path "$workdir" -Filter AksEdgeShell.ps1 -Recurse).FullName
 . $aksedgeShell
 
+$locationsScript = (Get-ChildItem -Path "$workdir" -Filter GetLocations.ps1 -Recurse).FullName
+. $locationsScript
+
+#Validate inputs
+$skipAzureArc = $false
+if ([string]::IsNullOrEmpty($SubscriptionId)) {
+    Write-Host "Warning: Require SubscriptionId for Azure Arc" -ForegroundColor Cyan
+    $skipAzureArc = $true
+}
+if ([string]::IsNullOrEmpty($TenantId)) {
+    Write-Host "Warning: Require TenantId for Azure Arc" -ForegroundColor Cyan
+    $skipAzureArc = $true
+}
+if ($skipAzureArc) {
+    Write-Host "Azure setup and Arc connection will be skipped as required details are not available" -ForegroundColor Yellow
+}
+if ([string]::IsNullOrEmpty($Location)) {
+    Write-Host "Warning: Require Location for Azure Arc" -ForegroundColor Cyan
+    $skipAzureArc = $true
+} elseif (!$(Get-IsSupportedLocation -Location $Location)) {
+    Write-Host "Error: Location $Location is not supported for Azure Arc" -ForegroundColor Red
+    Write-Host "Supported Locations : $(Get-ArcSupportedLocations)"
+    exit -1
+}
+
 # Setup Azure 
 Write-Host "Step 2: Setup Azure Cloud for Arc connections"
 $azcfg = (Get-AideUserConfig).Azure
@@ -169,7 +161,7 @@ if ($azcfg.Auth.Password) {
     Write-Host ">> skipping step 2" -ForegroundColor Yellow
 } else {
     $aksedgeazuresetup = (Get-ChildItem -Path "$workdir" -Filter AksEdgeAzureSetup.ps1 -Recurse).FullName
-    & $aksedgeazuresetup -jsonFile $aidejson -spContributorRole -spCredReset
+    & $aksedgeazuresetup -jsonFile $aidejson -spContributorRole -spCredReset -locationsScript $locationsScript
 
     if ($LastExitCode -eq -1) {
         Write-Host "Error in configuring Azure Cloud for Arc connection" -ForegroundColor Red
