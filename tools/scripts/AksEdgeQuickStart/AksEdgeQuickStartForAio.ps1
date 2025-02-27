@@ -210,11 +210,26 @@ param(
     }
 }
 
+function Get-AkseeInstalledProductName
+{
+
+    return (Get-ChildItem -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\' | Get-ItemProperty |  Where-Object {$_.DisplayName -like "*Aks Edge Essentials*"}).DisplayName
+}
+
 $UseK8s = $false
 if (! [Environment]::Is64BitProcess) {
     Write-Host "Error: Run this in 64bit Powershell session" -ForegroundColor Red
     exit -1
 }
+
+$installedAkseeProductName = Get-AkseeInstalledProductName
+if (-Not [string]::IsNullOrEmpty($installedAkseeProductName)) {
+    if ($installedAkseeProductName -like "*K8s*") {
+        Write-Host "Detected AKSEE k8s installation. Please uninstall and run the script again!" -ForegroundColor Red
+        exit -1
+    }
+}
+
 #Validate inputs
 if ($arcLocations -inotcontains $Location) {
     Write-Host "Error: Location $Location is not supported for Azure Arc" -ForegroundColor Red
@@ -345,7 +360,7 @@ Write-Host "Step 1 : Azure/AKS-Edge repo setup" -ForegroundColor Cyan
 
 if (!(Test-Path -Path "$installDir\$zipFile")) {
     try {
-        Invoke-WebRequest -Uri $url -OutFile $installDir\$zipFile
+        Invoke-WebRequest -Uri $url -OutFile $installDir\$zipFile -UseBasicParsing
     } catch {
         Write-Host "Error: Downloading Aide Powershell Modules failed" -ForegroundColor Red
         Stop-Transcript | Out-Null
